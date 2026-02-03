@@ -2,7 +2,7 @@
 // @name         Bulk Assignment Doer
 // @namespace    octo-vee.love <3
 // @version      1.0
-// @description  Spreadsheet Mode: Smart Location Detection (4-digit rule)
+// @description  Automates SIS tasks
 // @author       Vee
 // @match        https://philasd.infinitecampus.org/campus/sis/campus-tools/computerinventory/tool/computer-inventory*
 // @grant         none
