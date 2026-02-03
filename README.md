@@ -5,6 +5,8 @@ For freaks, by a freak <3
 
 
 USAGE!!!!! Read or DIE:
+
+
 In order to use spreadsheet mode, you MUST check the box for it and input data in THIS FORMAT ONLY: "SERIAL NUMBER" "STATUS" "LOCATION/STUDENT ID"
 
 
