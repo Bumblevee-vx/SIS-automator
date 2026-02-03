@@ -1,0 +1,309 @@
+// ==UserScript== 
+// @name         Bulk Assignment Doer
+// @namespace    octo-vee.love <3
+// @version      1.0
+// @description  Automates SIS tasks
+// @author       Vee
+// @match        https://philasd.infinitecampus.org/campus/sis/campus-tools/computerinventory/tool/computer-inventory*
+// @grant         none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    const STORAGE_KEY = 'IC_BULK_DATA';
+    const LOG_KEY = 'IC_BULK_LOGS';
+
+    const utils = {
+        wait: (ms) => new Promise(r => setTimeout(r, ms)),
+        getElement: (selector, root = document) => {
+            let el = root.querySelector(selector);
+            if (el) return el;
+            const iframes = root.querySelectorAll('iframe');
+            for (let f of iframes) {
+                try {
+                    const doc = f.contentDocument || f.contentWindow.document;
+                    el = utils.getElement(selector, doc);
+                    if (el) return el;
+                } catch (e) {}
+            }
+            return null;
+        },
+        waitFor: (selector) => {
+            return new Promise((resolve) => {
+                const check = () => {
+                    const el = utils.getElement(selector);
+                    if (el && el.offsetParent !== null) resolve(el);
+                    else setTimeout(check, 400);
+                };
+                check();
+            });
+        }
+    };
+
+    const logger = {
+        add: (msg, color = "black") => {
+            const fb = document.getElementById('feedback');
+            const entry = document.createElement('div');
+            entry.style.cssText = `border-bottom: 1px solid #eee; padding: 2px 0; color: ${color}; font-weight: ${color !== 'black' ? 'bold' : 'normal'}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            if (fb) { fb.appendChild(entry); fb.scrollTop = fb.scrollHeight; }
+            const logs = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+            logs.push({ t: new Date().toLocaleTimeString(), m: msg, c: color });
+            localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(-50)));
+        },
+        restore: () => {
+            const fb = document.getElementById('feedback');
+            if (!fb) return;
+            const savedLogs = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
+            savedLogs.forEach(l => {
+                const entry = document.createElement('div');
+                entry.style.cssText = `border-bottom: 1px solid #eee; padding: 2px 0; color: ${l.c};`;
+                entry.textContent = `[${l.t}] ${l.m}`;
+                fb.appendChild(entry);
+            });
+            fb.scrollTop = fb.scrollHeight;
+        }
+    };
+
+    const engine = {
+        async run() {
+            const state = JSON.parse(localStorage.getItem(STORAGE_KEY));
+            if (!state || !state.queue || state.queue.length === 0) return;
+
+            const data = this.parseLine(state);
+            const today = new Date();
+            const formattedDate = `${String(today.getMonth() + 1).padStart(2, '0')}/${String(today.getDate()).padStart(2, '0')}/${today.getFullYear()}`;
+
+            try {
+                logger.add(`Pwocessing :3 ${data.type}: ${data.serial} to ${data.id}`, "#005a9c");
+
+                // 1. Search
+                const input = await utils.waitFor('#Serial');
+                input.value = data.serial;
+                (utils.getElement('button[onclick*="searchRecord()"]') || utils.getElement('.search_button')).click();
+
+                // 2. Select Result
+                const row = await utils.waitFor('#searchTable tbody tr.table__row');
+                row.click();
+
+                // --- ANTI-DUPLICATE LOGIC ---
+                await utils.wait(800);
+                const activeAssignment = utils.getElement('tr[onclick*="editAssignment"]');
+
+                if (activeAssignment) {
+                    logger.add(`Ending existing assignment...`, "orange");
+                    activeAssignment.click();
+                    const endDateField = await utils.waitFor('#aEndDatedeets');
+                    const endReasonField = await utils.waitFor('#aEndReasondeets');
+                    endDateField.value = formattedDate;
+                    endReasonField.value = "Returned";
+                    window.confirm = () => true;
+                    utils.getElement('#save_a_button').click();
+                    await utils.wait(1500);
+                }
+
+                // 3. New Assignment
+                const newBtn = await utils.waitFor('#save_new_button');
+                newBtn.click();
+
+                const typeField = await utils.waitFor('#aTypedeets');
+                typeField.value = data.type;
+                typeField.dispatchEvent(new Event('change', { bubbles: true }));
+
+                await utils.wait(1000);
+
+                // Target correct ID box (Location vs Student)
+                const idSelector = data.type === 'Location' ? '#locationdeets' : '#sNumberdeets';
+                const idInput = utils.getElement(idSelector);
+                if (idInput) {
+                    idInput.value = data.id;
+                    idInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    idInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    idInput.dispatchEvent(new Event('blur', { bubbles: true }));
+                }
+
+                const dateField = utils.getElement('#sDate');
+                if (dateField) {
+                    dateField.value = formattedDate;
+                    dateField.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+
+                window.confirm = () => true;
+                await utils.wait(500);
+                utils.getElement('#save_a_button').click();
+
+                logger.add(`Yayy ${data.serial}`, "purple");
+
+                state.queue.shift();
+                if (state.queue.length === 0) { state.isRunning = false; state.isFinished = true; }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                await utils.wait(1500);
+                window.location.reload();
+
+            } catch (err) {
+                logger.add(`Failed: ${err.message}`, "red");
+                state.queue.shift();
+                if (state.queue.length === 0) { state.isRunning = false; state.isFinished = true; }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                await utils.wait(2000);
+                window.location.reload();
+            }
+        },
+
+        parseLine(state) {
+            const line = state.queue[0];
+            if (state.isSpreadsheet) {
+                const p = line.split('\t');
+                let serial = p[0]?.trim();
+                let type = p[1]?.trim();
+                let id = p[2]?.trim();
+                let status = p[3]?.trim() || state.manualStatus;
+
+                // SMART OVERRIDE: If ID is 4 digits, it's a Location
+                if (/^\d{4}$/.test(id)) {
+                    type = "Location";
+                } else if (!type) {
+                    type = "Student"; // Default if blank
+                }
+
+                return { serial, type, id, status };
+            }
+            return {
+                serial: line.trim(),
+                type: state.manualType,
+                id: (state.manualType === 'Location' ? state.manualLocID : state.manualID),
+                status: state.manualStatus
+            };
+        }
+    };
+
+    // UI RENDER AND EVENTS (Inherited from v3.0)
+    const ui = {
+        render() {
+            const style = document.createElement("style");
+            style.innerText = `
+                #bulk-popup { position: fixed; width: 380px; background: #fff; border: 2px solid #005a9c; z-index: 1000000; top: 10px; right: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: sans-serif; border-radius: 4px; }
+                .field-group { margin-bottom: 8px; }
+                .field-group label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 2px; color: #444; }
+                .field-group input, .field-group select, .field-group textarea { width: 100%; box-sizing: border-box; padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+                .btn-row { display: flex; gap: 5px; margin-top: 12px; }
+                .btn-start { background: #005a9c; color: white; border: none; padding: 8px; flex: 2; cursor: pointer; font-weight: bold; border-radius: 3px; }
+                .btn-stop { background: #d32f2f; color: white; border: none; padding: 8px; flex: 1; cursor: pointer; border-radius: 3px; }
+                #feedback { margin-top: 10px; height: 140px; overflow-y: auto; background: #fdfdfd; border: 1px solid #ddd; padding: 5px; font-family: monospace; font-size: 10px; }
+                .disabled-section { opacity: 0.3; pointer-events: none; }
+            `;
+            document.head.appendChild(style);
+
+            const popup = document.createElement('div');
+            popup.id = 'bulk-popup';
+            popup.innerHTML = `
+                <h3 style="margin:0 0 10px 0; color:#005a9c; font-size:15px; border-bottom: 1px solid #eee;">Vee's auto-assigner</h3>
+
+                <div style="margin-bottom:10px; font-size:12px;">
+                    <input type="checkbox" id="ui_spreadsheetMode"> <strong>Spreadsheet Mode</strong>
+                </div>
+
+                <div class="field-group">
+                    <label>Serials / Spreadsheet Data:</label>
+                    <textarea id="serials" rows="3" placeholder="Data goes here @_@"></textarea>
+                </div>
+
+                <div id="manualDataSection">
+                    <div class="field-group">
+                        <label>Assignment Type:</label>
+                        <select id="ui_aType">
+                            <option value="Student">Student</option>
+                            <option value="Staff">Staff</option>
+                            <option value="Location">Location</option>
+                        </select>
+                    </div>
+
+                    <div class="field-group">
+                        <label>Student ID:</label>
+                        <input type="text" id="ui_assigneeID" placeholder=" XD">
+                    </div>
+
+                    <div class="field-group">
+                        <label>Location ID (4 Digits):</label>
+                        <input type="text" id="ui_locID" placeholder=" :D" disabled>
+                    </div>
+
+                    <div class="field-group">
+                        <label>Status:</label>
+                        <select id="ui_status">
+                            <option value=" "></option>
+                            <option value="Returned">Returned</option>
+                            <option value="Reassigned">Reassigned</option>
+                            <option value="Damaged">Damaged</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="btn-row">
+                    <button id="stopBulk" class="btn-stop">RESET</button>
+                    <button id="startBulk" class="btn-start">START PROCESSING</button>
+                </div>
+
+                <div id="feedback"></div>
+            `;
+            document.body.appendChild(popup);
+            this.initEvents();
+            logger.restore();
+        },
+
+        initEvents() {
+            const ssCheck = document.getElementById('ui_spreadsheetMode');
+            const typeSel = document.getElementById('ui_aType');
+            const locInp = document.getElementById('ui_locID');
+            const stuInp = document.getElementById('ui_assigneeID');
+
+            ssCheck.onchange = () => document.getElementById('manualDataSection').classList.toggle('disabled-section', ssCheck.checked);
+            typeSel.onchange = () => {
+                const isLoc = typeSel.value === 'Location';
+                locInp.disabled = !isLoc; stuInp.disabled = isLoc;
+                if (!isLoc) locInp.value = ""; else stuInp.value = "";
+            };
+
+            document.getElementById('startBulk').onclick = () => {
+                const queue = document.getElementById('serials').value.split('\n').map(s => s.trim()).filter(s => s);
+                if (!queue.length) return;
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    queue, isSpreadsheet: ssCheck.checked, manualType: typeSel.value,
+                    manualID: stuInp.value, manualLocID: locInp.value, manualStatus: document.getElementById('ui_status').value,
+                    isRunning: true, isFinished: false
+                }));
+                window.location.reload();
+            };
+
+            document.getElementById('stopBulk').onclick = () => {
+                localStorage.removeItem(STORAGE_KEY);
+                localStorage.removeItem(LOG_KEY);
+                window.location.reload();
+            };
+        }
+    };
+
+    ui.render();
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (saved) {
+        if (saved.isFinished) {
+            logger.add("All done :3", "green");
+            localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, isFinished: false, isRunning: false, queue: [] }));
+        }
+        document.getElementById('serials').value = (saved.queue || []).join('\n');
+        document.getElementById('ui_spreadsheetMode').checked = saved.isSpreadsheet;
+        if (saved.isSpreadsheet) document.getElementById('manualDataSection').classList.add('disabled-section');
+        document.getElementById('ui_aType').value = saved.manualType;
+        document.getElementById('ui_assigneeID').value = saved.manualID;
+        document.getElementById('ui_locID').value = saved.manualLocID || "";
+        document.getElementById('ui_status').value = saved.manualStatus;
+
+        if (saved.isRunning && saved.queue.length > 0) {
+            document.getElementById('startBulk').disabled = true;
+            document.getElementById('startBulk').textContent = `RUNNING (${saved.queue.length})`;
+            engine.run();
+        }
+    }
+})();
