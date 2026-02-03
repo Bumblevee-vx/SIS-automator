@@ -1,4 +1,4 @@
-// ==UserScript== 
+// ==UserScript==
 // @name         Bulk Assignment Doer
 // @namespace    octo-vee.love <3
 // @version      1.0
@@ -160,7 +160,7 @@
                 let id = p[2]?.trim();
                 let status = p[3]?.trim() || state.manualStatus;
 
-                // SMART OVERRIDE: If ID is 4 digits, it's a Location
+                //If ID is 4 digits, it's a Location
                 if (/^\d{4}$/.test(id)) {
                     type = "Location";
                 } else if (!type) {
@@ -178,7 +178,7 @@
         }
     };
 
-    // UI RENDER AND EVENTS (Inherited from v3.0)
+    // UI RENDER AND EVENTS
     const ui = {
         render() {
             const style = document.createElement("style");
@@ -198,8 +198,7 @@
             const popup = document.createElement('div');
             popup.id = 'bulk-popup';
             popup.innerHTML = `
-                <h3 style="margin:0 0 10px 0; color:#005a9c; font-size:15px; border-bottom: 1px solid #eee;">Vee's auto-assigner</h3>
-
+                <h3 style="margin:0 0 10px 0; color:#005a9c; font-size:15px; border-bottom: 1px solid #eee;">Vee's auto-assigner</h3> 
                 <div style="margin-bottom:10px; font-size:12px;">
                     <input type="checkbox" id="ui_spreadsheetMode"> <strong>Spreadsheet Mode</strong>
                 </div>
