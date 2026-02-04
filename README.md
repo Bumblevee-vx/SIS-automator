@@ -14,6 +14,7 @@ INSTALLATION GUIDE!!!!
 
 This will install the script from the github repo and update when fixes/features are added. Please report issues here in the repo page.
 
+IF YOU DO NOT WANT TO AUTOUPDATE, COPY AND PASTE SCRIPT FROM THE REPO!
 
 USAGE!!!!! Read or DIE:
 
