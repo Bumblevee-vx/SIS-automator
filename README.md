@@ -1,7 +1,18 @@
 # SIS-automator
-Script that automates foul SIS tasks. Very self explanitory, yes yes! Add the [Tampermonkey](https://www.tampermonkey.net/) extension then copy the code into a new script. Save save then refresh your page, yes? New-box will be found in computer inventory tool.
+Script that automates foul SIS tasks.
 
 For freaks, by a freak <3
+
+INSTALLATION GUIDE!!!!
+
+1. Very self explanitory, yes yes! Add the [Tampermonkey](https://www.tampermonkey.net/) extension
+2. Navigate tampermonkey dashboard -> utilities
+3. Import this URL: https://gist.githubusercontent.com/Bumblevee-vx/a30ce81a09056426e6f54cada393a82b/raw/7a801eca0cdb9547d4b36ffb839f68a60e6e2c31/SIS%2520Automator
+4. Press install
+5. Press install again...
+6. ALL DONE!
+
+This will install the script from the github repo and update when fixes/features are added. Please report issues here in the repo page.
 
 
 USAGE!!!!! Read or DIE:
