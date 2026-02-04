@@ -260,7 +260,19 @@
             const popup = document.createElement('div');
             popup.id = 'bulk-popup';
             popup.innerHTML = `
-                <h3 style="margin:0 0 10px 0; color:#005a9c; font-size:15px; border-bottom: 1px solid #eee;">Vee's auto-assigner</h3>
+                
+
+                               <h3 style="margin:0 0 10px 0; color:#005a9c; font-size:15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+  <span>Vee's auto-assigner</span>
+  <a href="https://github.com/Bumblevee-vx/SIS-automator.git">
+    <img src="https://github.com/Bumblevee-vx/SIS-automator/blob/main/assets/245953751.png?raw=true"
+         alt="Github"
+         width="50"
+         height="50"
+         style="display: block;">
+ </a>
+</h3>
+
                 <div style="margin-bottom:10px; font-size:12px;"><input type="checkbox" id="ui_spreadsheetMode"> <strong>Spreadsheet Mode</strong></div>
                 <div class="field-group"><label>Serials / Spreadsheet Data:</label><textarea id="serials" rows="3" placeholder="Data goes here @_@"></textarea></div>
                 <div id="manualDataSection">
