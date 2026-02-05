@@ -3,7 +3,7 @@
 // @updateURL https://gist.githubusercontent.com/Bumblevee-vx/a30ce81a09056426e6f54cada393a82b/raw/9883855ac8523e3460420e0d7c09885f8de0f0d4/SIS%2520Automator
 // @downloadURL https://gist.githubusercontent.com/Bumblevee-vx/a30ce81a09056426e6f54cada393a82b/raw/9883855ac8523e3460420e0d7c09885f8de0f0d4/SIS%2520Automator
 // @namespace    octo-vee.love <3
-// @version      1.2
+// @version      1.2.1
 // @description  Automates SIS tasks
 // @author       Vee
 // @match        https://philasd.infinitecampus.org/campus/sis/campus-tools/computerinventory/tool/computer-inventory*
