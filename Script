@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Bulk Assignment Doer
 // @namespace    octo-vee.love <3
-// @version      1.1
-// @description  Automates some SIS tasks
+// @version      1.2
+// @description  Automates SIS tasks
 // @author       Vee
 // @match        https://philasd.infinitecampus.org/campus/sis/campus-tools/computerinventory/tool/computer-inventory*
 // @grant        none
@@ -11,9 +11,9 @@
 (function() {
     'use strict';
 
-    // Constants for local storage
     const STORAGE_KEY = 'IC_BULK_DATA';
     const LOG_KEY = 'IC_BULK_LOGS';
+    const UI_STATE_KEY = 'IC_BULK_UI_STATE'; // New key to remember if minimized
 
     // ---------------------------------------------------------
     // DOM & ASYNC UTILITIES
@@ -21,25 +21,21 @@
     const utils = {
         wait: (ms) => new Promise(r => setTimeout(r, ms)),
 
-        // Recursively search for elements, including within iframes
         getElement: (selector, root = document) => {
             let el = root.querySelector(selector);
             if (el) return el;
-            
+
             const iframes = root.querySelectorAll('iframe');
             for (let f of iframes) {
                 try {
                     const doc = f.contentDocument || f.contentWindow.document;
                     el = utils.getElement(selector, doc);
                     if (el) return el;
-                } catch (e) {
-                    // Ignore cross-origin iframe errors
-                }
+                } catch (e) { /* Ignore cross-origin */ }
             }
             return null;
         },
 
-        // Poll for element visibility before continuing
         waitFor: (selector, timeout = 5000) => {
             return new Promise((resolve, reject) => {
                 const startTime = Date.now();
@@ -47,7 +43,7 @@
                     const el = utils.getElement(selector);
                     if (el && el.offsetParent !== null) {
                         resolve(el);
-                    } else if (Date.now() - startTime > timeout) {
+                    } else if (timeout > 0 && Date.now() - startTime > timeout) {
                         reject(new Error(`Timeout waiting for ${selector}`));
                     } else {
                         setTimeout(check, 400);
@@ -59,32 +55,23 @@
     };
 
     // ---------------------------------------------------------
-    // LOGGING SYSTEM
+    // LOG
     // ---------------------------------------------------------
     const logger = {
-        // Add log entry to UI and persistent storage
         add: (msg, color = "black") => {
             const fb = document.getElementById('feedback');
             const entry = document.createElement('div');
-            
             entry.style.cssText = `border-bottom: 1px solid #eee; padding: 2px 0; color: ${color}; font-weight: ${color !== 'black' ? 'bold' : 'normal'}`;
             entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            
-            if (fb) { 
-                fb.appendChild(entry); 
-                fb.scrollTop = fb.scrollHeight; 
-            }
+            if (fb) { fb.appendChild(entry); fb.scrollTop = fb.scrollHeight; }
 
             const logs = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
             logs.push({ t: new Date().toLocaleTimeString(), m: msg, c: color });
             localStorage.setItem(LOG_KEY, JSON.stringify(logs.slice(-100)));
         },
-
-        // Reload logs from storage on page refresh
         restore: () => {
             const fb = document.getElementById('feedback');
             if (!fb) return;
-            
             const savedLogs = JSON.parse(localStorage.getItem(LOG_KEY) || "[]");
             savedLogs.forEach(l => {
                 const entry = document.createElement('div');
@@ -97,7 +84,7 @@
     };
 
     // ---------------------------------------------------------
-    // MAIN AUTOMATION ENGINE
+    // AUTOMATION PART
     // ---------------------------------------------------------
     const engine = {
         async run() {
@@ -111,67 +98,59 @@
             try {
                 logger.add(`Hi ${data.serial}. How are you?`, "#005a9c");
 
-                // Perform Search
-                const input = await utils.waitFor('#Serial');
+                // Source 1: Search & Navigation
+                const input = await utils.waitFor('#Serial', 0);
                 input.value = data.serial;
                 (utils.getElement('button[onclick*="searchRecord()"]') || utils.getElement('.search_button')).click();
 
-                // Select Result Row
                 let row;
                 try {
-                    row = await utils.waitFor('#searchTable tbody tr.table__row', 4000);
+                    row = await utils.waitFor('#searchTable tbody tr.table__row', 0);
                     row.click();
                 } catch (e) {
                     throw new Error("Serial not found. Typo??");
                 }
 
-                // Permission/Visibility Check
-                try {
-                    await utils.waitFor('#save_new_button', 3000);
-                } catch (e) {
-                    throw new Error("This ain't yours.");
-                }
+                await utils.waitFor('#save_new_button', 0);
 
-                // Handle existing assignments (Anti-Duplicate)
+                // End Existing Assignments
                 await utils.wait(800);
                 const activeAssignment = utils.getElement('tr[onclick*="editAssignment"]');
                 if (activeAssignment) {
                     logger.add(`Ending existing assignment...`, "orange");
                     activeAssignment.click();
-                    
-                    const endDateField = await utils.waitFor('#aEndDatedeets');
-                    const endReasonField = await utils.waitFor('#aEndReasondeets');
-                    
+
+                    const endDateField = await utils.waitFor('#aEndDatedeets', 0);
+                    const endReasonField = await utils.waitFor('#aEndReasondeets', 0);
+
                     endDateField.value = formattedDate;
                     endReasonField.value = "Returned";
-                    
+
                     window.confirm = () => true;
                     utils.getElement('#save_a_button').click();
                     await utils.wait(1500);
                 }
 
-                // Create New Assignment
+                // New Assignment Form
                 utils.getElement('#save_new_button').click();
-                const typeField = await utils.waitFor('#aTypedeets');
+                const typeField = await utils.waitFor('#aTypedeets', 0);
                 typeField.value = data.type;
                 typeField.dispatchEvent(new Event('change', { bubbles: true }));
 
                 await utils.wait(1000);
 
-                // Handle Status Dropdown
+                // Status
                 const statusField = utils.getElement('#aEndReasondeets');
                 if (statusField && data.status) {
                     const inputStatus = data.status.toLowerCase().trim();
                     const options = Array.from(statusField.options);
                     const match = options.find(opt => opt.text.toLowerCase().trim() === inputStatus);
-                    
                     if (match) statusField.value = match.value;
                     else statusField.value = data.status;
-                    
                     statusField.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-                // Set ID (Student vs Location)
+                // IDs
                 const idSelector = data.type === 'Location' ? '#locationdeets' : '#sNumberdeets';
                 const idInput = utils.getElement(idSelector);
                 if (idInput) {
@@ -179,30 +158,68 @@
                     idInput.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-                // Set Start Date
+                // Date
                 const dateField = utils.getElement('#sDate');
                 if (dateField) {
                     dateField.value = formattedDate;
                     dateField.dispatchEvent(new Event('change', { bubbles: true }));
                 }
 
-                // Save and Reload
-                window.confirm = () => true;
+                // ------------------------------------------------------
+                // CHCEK FOR STUDENT ID
+                // ------------------------------------------------------
+                const saveBtn = utils.getElement('#save_a_button') || utils.getElement('#update_a_button');
+                const targetWindow = saveBtn.ownerDocument.defaultView;
+
+                targetWindow.confirm = () => true;
+
+                let validationError = null;
+                const originalAlert = targetWindow.alert;
+
+                targetWindow.alert = (msg) => {
+                    validationError = msg;
+                    console.log("Trapped Alert:", msg);
+                };
+
                 await utils.wait(1000);
-                (utils.getElement('#save_a_button') || utils.getElement('#update_a_button')).click();
+                saveBtn.click();
+
+                // Poll for Success or Error
+                const validationTimeout = 20000;
+                const startVal = Date.now();
+
+                while (Date.now() - startVal < validationTimeout) {
+                    if (validationError) break;
+
+                    // Check Visibility
+                    const currentTypeField = utils.getElement('#aTypedeets');
+                    if (!currentTypeField || currentTypeField.offsetParent === null) {
+                        console.log("Form hidden or removed - Success detected!");
+                        break;
+                    }
+                    await utils.wait(200);
+                }
+
+                targetWindow.alert = originalAlert;
+
+                if (validationError) {
+                    if (validationError.includes("does not relate to an active Student")) {
+                        throw new Error("Invalid Student ID (Not Active/Found)");
+                    }
+                    throw new Error(`Server Rejected: ${validationError}`);
+                }
 
                 logger.add(`Pwocessed :3 ${data.serial}`, "purple");
 
                 state.queue.shift();
                 if (state.queue.length === 0) { state.isRunning = false; state.isFinished = true; }
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
                 await utils.wait(1500);
                 window.location.reload();
 
             } catch (err) {
                 logger.add(` ${err.message}`, "red");
-
-                // Record skipped devices for end report
                 if (!state.skipped) state.skipped = [];
                 state.skipped.push({ s: data.serial, r: err.message });
 
@@ -214,7 +231,6 @@
             }
         },
 
-        // Parse individual line logic
         parseLine(state) {
             const line = state.queue[0];
             if (state.isSpreadsheet) {
@@ -237,15 +253,31 @@
     };
 
     // ---------------------------------------------------------
-    // USER INTERFACE
+    // UI
     // ---------------------------------------------------------
     const ui = {
         render() {
             if (document.getElementById('bulk-popup')) return;
-            
+
+            // Load saved UI state (minimized or not)
+            const uiState = JSON.parse(localStorage.getItem(UI_STATE_KEY) || '{"minimized": false}');
+            const isMin = uiState.minimized;
+
             const style = document.createElement("style");
             style.innerText = `
-                #bulk-popup { position: fixed; width: 380px; background: #fff; border: 2px solid #005a9c; z-index: 1000000; top: 10px; right: 10px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: sans-serif; border-radius: 4px; }
+                #bulk-popup { position: fixed; width: 380px; background: #fff; border: 2px solid #005a9c; z-index: 1000000; top: 10px; right: 10px; padding: 0; box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: sans-serif; border-radius: 4px; overflow: hidden; transition: height 0.2s; }
+                #bulk-header { padding: 10px 15px; background: #f0f7fc; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
+                #bulk-header h3 { margin: 0; color: #005a9c; font-size: 15px; }
+                #bulk-body { padding: 15px; display: block; }
+
+                /* Minimize Button Style */
+                .min-btn { background: none; border: 1px solid #005a9c; color: #005a9c; font-weight: bold; cursor: pointer; border-radius: 3px; width: 20px; height: 20px; line-height: 16px; text-align: center; padding: 0; }
+                .min-btn:hover { background: #005a9c; color: white; }
+
+                /* Minimized State */
+                #bulk-popup.minimized #bulk-body { display: none; }
+                #bulk-popup.minimized { width: 250px; } /* Smaller width when minimized */
+
                 .field-group { margin-bottom: 8px; }
                 .field-group label { display: block; font-size: 11px; font-weight: bold; margin-bottom: 2px; color: #444; }
                 .field-group input, .field-group select, .field-group textarea { width: 100%; box-sizing: border-box; padding: 5px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
@@ -259,32 +291,32 @@
 
             const popup = document.createElement('div');
             popup.id = 'bulk-popup';
+            if (isMin) popup.classList.add('minimized');
+
             popup.innerHTML = `
-                
-
-                               <h3 style="margin:0 0 10px 0; color:#005a9c; font-size:15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-  <span>Vee's auto-assigner</span>
-  <a href="https://github.com/Bumblevee-vx/SIS-automator.git">
-    <img src="https://github.com/Bumblevee-vx/SIS-automator/blob/main/assets/245953751.png?raw=true"
-         alt="Github"
-         width="50"
-         height="50"
-         style="display: block;">
- </a>
-</h3>
-
-                <div style="margin-bottom:10px; font-size:12px;"><input type="checkbox" id="ui_spreadsheetMode"> <strong>Spreadsheet Mode</strong></div>
-                <div class="field-group"><label>Serials / Spreadsheet Data:</label><textarea id="serials" rows="3" placeholder="Data goes here @_@"></textarea></div>
-                <div id="manualDataSection">
-                    <div class="field-group"><label>Type:</label><select id="ui_aType"><option value="Student">Student</option><option value="Location">Location</option></select></div>
-                    <div class="field-group"><label>Student ID:</label><input type="text" id="ui_assigneeID" placeholder=" XD"></div>
-                    <div class="field-group"><label>Location ID (4 Digits):</label><input type="text" id="ui_locID" placeholder=" :D" disabled></div>
-                    <div class="field-group"><label>Status:</label><select id="ui_status">
-                        <option value="Damaged">Damaged</option><option value="loaned to staff">Loaned to staff</option><option value="Lost">Lost</option><option value="Reassigned">Reassigned</option><option value="Stolen">Stolen</option>
-                    </select></div>
+                <div id="bulk-header">
+                   <h3>Vee's auto-assigner</h3>
+                   <div style="display:flex; align-items:center; gap:10px;">
+                       <button id="ui_minimize" class="min-btn" title="Minimize/Expand">${isMin ? '+' : '–'}</button>
+                       <a href="https://github.com/Bumblevee-vx/SIS-automator.git" target="_blank">
+                        <img src="https://github.com/Bumblevee-vx/SIS-automator/blob/main/assets/245953751.png?raw=true" alt="Github" width="50" height="50" style="display: block;">
+                       </a>
+                   </div>
                 </div>
-                <div class="btn-row"><button id="stopBulk" class="btn-stop">RESET</button><button id="startBulk" class="btn-start">START PROCESSING</button></div>
-                <div id="feedback"></div>
+                <div id="bulk-body">
+                    <div style="margin-bottom:10px; font-size:12px;"><input type="checkbox" id="ui_spreadsheetMode"> <strong>Spreadsheet Mode</strong></div>
+                    <div class="field-group"><label>Serials / Spreadsheet Data:</label><textarea id="serials" rows="3" placeholder="Data goes here @_@"></textarea></div>
+                    <div id="manualDataSection">
+                        <div class="field-group"><label>Type:</label><select id="ui_aType"><option value="Student">Student</option><option value="Location">Location</option></select></div>
+                        <div class="field-group"><label>Student ID:</label><input type="text" id="ui_assigneeID" placeholder=" XD"></div>
+                        <div class="field-group"><label>Location ID (4 Digits):</label><input type="text" id="ui_locID" placeholder=" :D" disabled></div>
+                        <div class="field-group"><label>Status:</label><select id="ui_status">
+                            <option value="Damaged">Damaged</option><option value="loaned to staff">Loaned to staff</option><option value="Lost">Lost</option><option value="Reassigned">Reassigned</option><option value="Stolen">Stolen</option>
+                        </select></div>
+                    </div>
+                    <div class="btn-row"><button id="stopBulk" class="btn-stop">RESET</button><button id="startBulk" class="btn-start">START PROCESSING</button></div>
+                    <div id="feedback"></div>
+                </div>
             `;
             document.body.appendChild(popup);
             this.initEvents();
@@ -296,19 +328,30 @@
             const typeSel = document.getElementById('ui_aType');
             const locInp = document.getElementById('ui_locID');
             const stuInp = document.getElementById('ui_assigneeID');
+            const minBtn = document.getElementById('ui_minimize');
+            const popup = document.getElementById('bulk-popup');
+
+            // Minimize Logic
+            minBtn.onclick = () => {
+                const isNowMin = popup.classList.toggle('minimized');
+                minBtn.textContent = isNowMin ? '+' : '–';
+                localStorage.setItem(UI_STATE_KEY, JSON.stringify({ minimized: isNowMin }));
+            };
+
+            // Double click header to toggle
+            document.getElementById('bulk-header').ondblclick = minBtn.onclick;
 
             ssCheck.onchange = () => document.getElementById('manualDataSection').classList.toggle('disabled-section', ssCheck.checked);
-            
             typeSel.onchange = () => {
                 const isLoc = typeSel.value === 'Location';
-                locInp.disabled = !isLoc; 
+                locInp.disabled = !isLoc;
                 stuInp.disabled = isLoc;
             };
 
             document.getElementById('startBulk').onclick = () => {
                 const queue = document.getElementById('serials').value.split('\n').map(s => s.trim()).filter(s => s);
                 if (!queue.length) return;
-                
+
                 localStorage.setItem(STORAGE_KEY, JSON.stringify({
                     queue, skipped: [], isSpreadsheet: ssCheck.checked, manualType: typeSel.value,
                     manualID: stuInp.value, manualLocID: locInp.value, manualStatus: document.getElementById('ui_status').value,
@@ -325,28 +368,21 @@
         }
     };
 
-    // ---------------------------------------------------------
-    // EXECUTION ENTRY POINT
-    // ---------------------------------------------------------
     ui.render();
-    
+
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved) {
-        // Finalize run and display report
         if (saved.isFinished) {
             logger.add("All done!", "green");
             if (saved.skipped && saved.skipped.length > 0) {
                 logger.add(`SKIPPED DEVICES (${saved.skipped.length}):`, "red");
-                saved.skipped.forEach(item => {
-                    logger.add(`• ${item.s}: ${item.r}`, "red");
-                });
+                saved.skipped.forEach(item => { logger.add(`• ${item.s}: ${item.r}`, "red"); });
             } else {
                 logger.add("No devices were skipped. Nice.", "purple");
             }
             localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, isFinished: false, isRunning: false, queue: [], skipped: [] }));
         }
 
-        // Resume processing if active
         if (saved.isRunning && saved.queue.length > 0) {
             document.getElementById('startBulk').disabled = true;
             document.getElementById('startBulk').textContent = `RUNNING (${saved.queue.length})`;
