@@ -7,7 +7,7 @@ INSTALLATION GUIDE!!!!
 
 1. Very self explanitory, yes yes! Add the [Tampermonkey](https://www.tampermonkey.net/) extension
 2. Navigate tampermonkey dashboard -> utilities
-3. Import this URL: https://gist.githubusercontent.com/Bumblevee-vx/a30ce81a09056426e6f54cada393a82b/raw/7a801eca0cdb9547d4b36ffb839f68a60e6e2c31/SIS%2520Automator
+3. Import this URL: [https://gist.githubusercontent.com/Bumblevee-vx/a30ce81a09056426e6f54cada393a82b/raw/7a801eca0cdb9547d4b36ffb839f68a60e6e2c31/SIS%2520Automator](https://gist.githubusercontent.com/Bumblevee-vx/a30ce81a09056426e6f54cada393a82b/raw/9883855ac8523e3460420e0d7c09885f8de0f0d4/SIS%2520Automator)
 4. Press install
 5. Press install again...
 6. ALL DONE!
