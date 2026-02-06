@@ -3,7 +3,7 @@
 // @updateURL https://raw.githubusercontent.com/Bumblevee-vx/SIS-automator/refs/heads/main/Script
 // @downloadURL https://raw.githubusercontent.com/Bumblevee-vx/SIS-automator/refs/heads/main/Script
 // @namespace    octo-vee.love <3
-// @version      1.2.1
+// @version      1.3
 // @description  Automates SIS tasks
 // @author       Vee
 // @match        https://philasd.infinitecampus.org/campus/sis/campus-tools/computerinventory/tool/computer-inventory*
@@ -100,30 +100,58 @@
             try {
                 logger.add(`Hi ${data.serial}. How are you?`, "#005a9c");
 
-                // Source 1: Search & Navigation
-                const input = await utils.waitFor('#Serial', 0);
+                // source1 code: Search & Navigation
+                const input = await utils.waitFor('#Serial', 20000);
                 input.value = data.serial;
                 (utils.getElement('button[onclick*="searchRecord()"]') || utils.getElement('.search_button')).click();
 
-                let row;
-                try {
-                    row = await utils.waitFor('#searchTable tbody tr.table__row', 0);
-                    row.click();
-                } catch (e) {
-                    throw new Error("Serial not found. Typo??");
+                const searchTimeout = 15000; // 15s max wait for slowies
+                const startTime = Date.now();
+                let row = null;
+
+                while (Date.now() - startTime < searchTimeout) {
+                    // 1. Check table results row for new serila
+                    const foundRow = utils.getElement('#searchTable tbody tr.table__row');
+                    if (foundRow && foundRow.offsetParent !== null) {
+                        row = foundRow;
+                        break;
+                    }
+
+                    // 2. Check for specific message ("No data available")
+                    const tableBody = utils.getElement('#searchTable tbody');
+                    if (tableBody && tableBody.innerText.includes("No data available in table")) {
+
+                        // --- THE SAFETY DELAY ---
+                        // error, but not trustet yet.
+                        await utils.wait(1000);
+                        const doubleCheckRow = utils.getElement('#searchTable tbody tr.table__row');
+                        if (doubleCheckRow) {
+                             row = doubleCheckRow;
+                             break;
+                        }
+
+                        const doubleCheckBody = utils.getElement('#searchTable tbody');
+                        if (doubleCheckBody && doubleCheckBody.innerText.includes("No data available in table")) {
+                            // Validated failure. trusts error if it lasts more than one second
+                            throw new Error("Serial not found. Typo?");
+                        }
+                    }
+
+                    await utils.wait(250);
                 }
 
-                await utils.waitFor('#save_new_button', 0);
+                row.click();
+                await utils.waitFor('#save_new_button', 5000);
 
                 // End Existing Assignments
                 await utils.wait(800);
                 const activeAssignment = utils.getElement('tr[onclick*="editAssignment"]');
                 if (activeAssignment) {
-                    logger.add(`Ending existing assignment...`, "orange");
+                    logger.add(`Ending old assignment...`, "orange");
                     activeAssignment.click();
 
-                    const endDateField = await utils.waitFor('#aEndDatedeets', 0);
-                    const endReasonField = await utils.waitFor('#aEndReasondeets', 0);
+                    const endDateField = await utils.waitFor('#aEndDatedeets', 3000);
+                    const endReasonField = await utils.waitFor('#aEndReasondeets', 3000);
 
                     endDateField.value = formattedDate;
                     endReasonField.value = "Returned";
