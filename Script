@@ -46,7 +46,7 @@
                     if (el && el.offsetParent !== null) {
                         resolve(el);
                     } else if (timeout > 0 && Date.now() - startTime > timeout) {
-                        reject(new Error(`Timeout waiting for ${selector}`));
+                        reject(new Error(`Timeout waiting for editing button. Check manually`));
                     } else {
                         setTimeout(check, 400);
                     }
@@ -147,7 +147,6 @@
                 await utils.wait(800);
                 const activeAssignment = utils.getElement('tr[onclick*="editAssignment"]');
                 if (activeAssignment) {
-                    logger.add(`Ending old assignment...`, "orange");
                     activeAssignment.click();
 
                     const endDateField = await utils.waitFor('#aEndDatedeets', 3000);
@@ -239,7 +238,7 @@
                     throw new Error(`Server Rejected: ${validationError}`);
                 }
 
-                logger.add(`Pwocessed :3 ${data.serial}`, "purple");
+                logger.add(`Pwocessed ${data.serial} :3`, "purple");
 
                 state.queue.shift();
                 if (state.queue.length === 0) { state.isRunning = false; state.isFinished = true; }
