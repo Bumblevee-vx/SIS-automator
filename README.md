@@ -5,7 +5,7 @@ For freaks, by a freak <3
 
 INSTALLATION GUIDE!!!!
 
-1. Very self explanitory, yes yes! Add the [Tampermonkey](https://www.tampermonkey.net/) extension
+1. Very self explanitory, yes yes! Add the [Tampermonkey](https://www.tampermonkey.net/) extension <img width="1920" height="918" alt="Screenshot_20260204_122647" src="https://github.com/Bumblevee-vx/SIS-automator/blob/main/assets/Screenshot_20260212_143111.png?raw=true" />
 2. Navigate tampermonkey dashboard -> utilities
 3. Import this URL: https://raw.githubusercontent.com/Bumblevee-vx/SIS-automator/refs/heads/main/Script
 4. Press install
