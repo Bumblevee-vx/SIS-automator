@@ -1,5 +1,5 @@
 # SIS-automator
-Script that automates foul SIS tasks. DEMO: https://youtu.be/rKS33PfnioY
+Script that automates foul SIS tasks. DEMO: [https://youtu.be/rKS33PfnioY](https://www.youtube.com/watch?v=sBnD7kXScGI)
 
 For freaks, by a freak <3
 
